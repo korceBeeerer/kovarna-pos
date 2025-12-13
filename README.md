@@ -7,8 +7,9 @@ Tabletová aplikace pro evidenci objednávek v kovárně. Zaměstnanec nakliká 
 - 📱 **Kompaktní textové rozhraní** - Mnoho produktů na jedné obrazovce, rychlé klikání
 - 📊 **Načítání produktů z Excelu** - Produkty se automaticky načtou z vašeho Excel souboru
 - 🛍️ **Košík** - Přidávání produktů, úprava množství, zobrazení celkové ceny
+- 💱 **Dual měna** - Zobrazení cen v CZK i EUR s nastavitelným kurzem
 - 📅 **Automatický zápis podle dne** - Objednávky se ukládají do správného dne v měsíci
-- ➕ **Vlastní produkty** - Možnost přidat zakázkové produkty (helma, speciální objednávky)
+- ➕ **Zakázkové produkty** - Možnost přidat speciální zakázku přímo do košíku (helma, nestandardní práce)
 - 💾 **Automatické zálohování** - Denní zálohy Excelu + tlačítko pro manuální zálohu
 - 🌐 **Lokální síť** - Komunikace přes WiFi, **bez potřeby internetu**
 - ✅ **Real-time status** - Kontrola připojení mezi tabletem a PC
@@ -119,31 +120,40 @@ Pro zastavení serveru stiskněte Ctrl+C
 
 ## Použití aplikace
 
-### Práce s produkty
+### Nastavení kurzu EUR
 
-**Produkty z Excelu:**
-- Načtou se automaticky při spuštění
-- Zobrazují se jako textová okýnka (název + cena)
-- **Nelze je smazat** (jsou součástí Excelu)
+V hlavičce aplikace najdete pole **"1 EUR ="**:
+- Nastavte aktuální kurz (výchozí: 25 Kč)
+- Všechny ceny v košíku se automaticky přepočítají
+- Zobrazuje se **CZK i EUR** pro každou položku i celkovou částku
 
-**Vlastní produkty (zakázky):**
-- Klikněte na **"Spravovat produkty"**
-- Zadejte název a cenu (např. "Zakázková helma", 2500 Kč)
-- Označeny zeleným kolečkem **"V"** (vlastní)
-- Můžete je smazat (hover nad kartou → × tlačítko)
-- Ukládají se do localStorage tabletu
+### Produkty z Excelu
+
+- Načtou se automaticky při spuštění ze souboru
+- Zobrazují se jako textová okýnka (název + cena v CZK)
+- **Nelze je mazat** (jsou pevná součást Excelu)
+- Kliknutím přidáte 1 ks do košíku
+
+### Zakázkové produkty (speciální objednávky)
+
+Pro nestandardní zakázky (např. "Zakázková helma"):
+1. Klikněte na **"+ Přidat zakázku"**
+2. Zadejte název, cenu (Kč) a množství
+3. Položka se přidá **přímo do košíku**
+4. **NEPŘIDÁVÁ** se do seznamu produktů (je to jednorázová zakázka)
 
 ### Vytvoření objednávky
 
 1. **Naklikejte produkty** - Každé kliknutí přidá 1 ks do košíku
-2. **Upravte množství** - Tlačítka **+** / **-** v košíku
-3. **Zkontrolujte cenu** - Zobrazuje se celková částka
-4. **Uložte** - Tlačítko **"Uložit objednávku"**
+2. **Nebo přidejte zakázku** - Tlačítko "+ Přidat zakázku" pro speciální položky
+3. **Upravte množství** - Tlačítka **+** / **-** v košíku
+4. **Zkontrolujte cenu** - Zobrazuje se v CZK i EUR
+5. **Uložte** - Tlačítko **"Uložit objednávku"**
 
 Data se automaticky zapíší do Excelu:
 - Do správného dne (podle aktuálního data)
 - Navýší počet kusů u existujících produktů
-- Přidá nové řádky pro vlastní produkty
+- Přidá nové řádky pro zakázkové produkty
 
 ### Zálohování
 
@@ -232,7 +242,7 @@ CHYBA: Excel soubor nenalezen
 
 ⚠️ **Struktura souboru musí zůstat stejná** - 50 řádků na den
 
-⚠️ **Vlastní produkty** se ukládají pouze v tabletu (localStorage), ne v Excelu - pokud se ale prodají, zapíší se do Excelu
+⚠️ **Zakázkové produkty** se přidávají přímo do košíku a při uložení objednávky se zapíší do Excelu jako nový řádek v příslušném dni
 
 ## Podpora
 
