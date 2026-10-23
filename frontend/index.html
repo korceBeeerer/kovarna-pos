@@ -33,6 +33,12 @@
             </div>
         </header>
 
+        <!-- Upozornění, že Excel je z jiného měsíce -->
+        <div class="month-warning" id="monthWarning">
+            <span id="monthWarningText"></span>
+            <button class="btn btn-primary" id="monthWarningBtn">Nahrát nový Excel</button>
+        </div>
+
         <!-- Hlavní obsah -->
         <main>
             <!-- Levý panel - Produkty -->
@@ -123,6 +129,7 @@
                     <label>Aktuální Excel soubor:</label>
                     <div class="current-file" id="currentExcelFile">-</div>
                     <div class="settings-status" id="excelPathStatus"></div>
+                    <div class="settings-status" id="excelMonthStatus"></div>
                     <a class="btn btn-secondary btn-download" id="downloadExcelBtn" href="/api/excel/download">
                         ⬇ Stáhnout aktuální Excel
                     </a>
@@ -130,7 +137,11 @@
                 <p style="color: #6b7280; margin-bottom: 20px;">
                     Vyberte Excel soubor s listem „Tržby“. Soubor se nahraje na server
                     (do složky <code>data</code> v aplikaci) a objednávky se budou zapisovat do něj.
-                    Soubor se stejným názvem se před přepsáním automaticky zazálohuje.
+                </p>
+                <p style="color: #6b7280; margin-bottom: 20px;">
+                    <strong>Nový Excel nahrávejte vždy 1. den v měsíci.</strong> Soubor musí mít
+                    blok pro každý den měsíce. Dosavadní Excel se při nahrání automaticky uloží
+                    do archivu (<code>data/archiv</code>) pod názvem s měsícem, např. <code>2026-10_Tržby.xlsx</code>.
                 </p>
                 <form id="settingsForm">
                     <div class="form-group">

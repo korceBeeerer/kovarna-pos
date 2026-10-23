@@ -33,6 +33,10 @@ const excelPathStatus = document.getElementById('excelPathStatus');
 const currentExcelFile = document.getElementById('currentExcelFile');
 const downloadExcelBtn = document.getElementById('downloadExcelBtn');
 const uploadExcelBtn = document.getElementById('uploadExcelBtn');
+const excelMonthStatus = document.getElementById('excelMonthStatus');
+const monthWarning = document.getElementById('monthWarning');
+const monthWarningText = document.getElementById('monthWarningText');
+const monthWarningBtn = document.getElementById('monthWarningBtn');
 
 // Funkce pro získání EUR kurzu
 function getEurRate() {
@@ -77,6 +81,17 @@ function updateExcelFileInfo(config) {
     excelPathStatus.textContent = config.exists ? '✓ Soubor nalezen' : '✗ Soubor nenalezen';
     excelPathStatus.className = `settings-status ${config.exists ? 'ok' : 'error'}`;
     downloadExcelBtn.style.display = config.exists ? '' : 'none';
+
+    // Měsíc, pro který je Excel nahraný, a upozornění při změně měsíce
+    if (config.month_error) {
+        excelMonthStatus.textContent = `✗ Nahráno pro: ${config.excel_month_label}`;
+        excelMonthStatus.className = 'settings-status error';
+    } else {
+        excelMonthStatus.textContent = config.excel_month_label ? `✓ Nahráno pro: ${config.excel_month_label}` : '';
+        excelMonthStatus.className = 'settings-status ok';
+    }
+    monthWarningText.textContent = '⚠ ' + (config.month_error || '');
+    monthWarning.classList.toggle('active', Boolean(config.month_error));
 }
 
 function openSettingsModal() {
@@ -386,6 +401,7 @@ async function saveOrder() {
             renderCart();
         } else {
             showNotification('Chyba při ukládání: ' + (result.error || 'Neznámá chyba'), 'error');
+            loadConfig(); // Např. začal nový měsíc - zobraz upozornění
         }
     } catch (error) {
         showNotification('Chyba připojení k serveru: ' + error.message, 'error');
@@ -475,6 +491,7 @@ function setupEventListeners() {
     customOrderForm.addEventListener('submit', addCustomOrder);
     stornoModeBtn.addEventListener('click', toggleStornoMode);
     settingsBtn.addEventListener('click', openSettingsModal);
+    monthWarningBtn.addEventListener('click', openSettingsModal);
     closeSettings.addEventListener('click', closeSettingsModal);
     settingsForm.addEventListener('submit', saveSettings);
 
@@ -499,6 +516,7 @@ function setupEventListeners() {
 
     // Pravidelná kontrola připojení
     setInterval(checkServerConnection, 30000); // Každých 30 sekund
+    setInterval(loadConfig, 5 * 60 * 1000); // Kontrola změny měsíce každých 5 minut
 }
 
 // Globální funkce pro HTML onclick

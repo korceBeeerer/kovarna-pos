@@ -1,5 +1,7 @@
 import openpyxl
+import calendar
 from datetime import datetime
+import io
 import json
 import os
 import shutil
@@ -11,6 +13,7 @@ from werkzeug.utils import secure_filename
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BACKEND_DIR, 'config.json')
 DATA_DIR = os.path.join(os.path.dirname(BACKEND_DIR), 'data')
+ARCHIVE_DIR = os.path.join(DATA_DIR, 'archiv')  # Excely z předchozích měsíců
 DEFAULT_EXCEL_FILE = r"C:\Users\martin.korcak\Downloads\Tabulka tržeb.xlsx"
 WORKSHEET_NAME = "Tržby"
 
@@ -39,6 +42,40 @@ def load_config():
 
 
 EXCEL_FILE = load_config().get('excel_file') or DEFAULT_EXCEL_FILE
+# Měsíc, pro který byl Excel nahrán, ve formátu "RRRR-MM" (None = neznámý)
+EXCEL_MONTH = load_config().get('excel_month')
+
+MONTH_NAMES = ['leden', 'únor', 'březen', 'duben', 'květen', 'červen',
+               'červenec', 'srpen', 'září', 'říjen', 'listopad', 'prosinec']
+
+
+def current_month():
+    return datetime.now().strftime("%Y-%m")
+
+
+def month_label(month):
+    """'2026-10' -> 'říjen 2026'"""
+    if not month:
+        return None
+    year, mon = month.split('-')
+    return f"{MONTH_NAMES[int(mon) - 1]} {year}"
+
+
+def days_in_month(month):
+    year, mon = map(int, month.split('-'))
+    return calendar.monthrange(year, mon)[1]
+
+
+def get_month_error():
+    """
+    Vrátí text chyby, pokud je nahraný Excel pro jiný měsíc než aktuální,
+    jinak None. Zápis do Excelu z jiného měsíce by smíchal data.
+    """
+    if EXCEL_MONTH and EXCEL_MONTH != current_month():
+        return (f"Excel je nahraný pro {month_label(EXCEL_MONTH)}, ale teď je "
+                f"{month_label(current_month())}. Nahrajte nový Excel v Nastavení "
+                f"(předchozí se automaticky uloží do archivu).")
+    return None
 
 
 def get_config():
@@ -46,8 +83,30 @@ def get_config():
     return {
         "excel_file": EXCEL_FILE,
         "excel_filename": os.path.basename(EXCEL_FILE),
-        "exists": os.path.exists(EXCEL_FILE)
+        "exists": os.path.exists(EXCEL_FILE),
+        "excel_month": EXCEL_MONTH,
+        "excel_month_label": month_label(EXCEL_MONTH),
+        "month_error": get_month_error()
     }
+
+
+def is_day_block(ws, day):
+    """Ověří, že na začátku bloku pro daný den je hlavička ('Produkt' ve sloupci B)."""
+    header = ws.cell(row=get_day_start_row(day), column=COL_PRODUCT).value
+    return isinstance(header, str) and header.strip().lower() == 'produkt'
+
+
+def day_block_error(day):
+    return (f"V Excelu chybí blok pro den {day} (na řádku {get_day_start_row(day)} "
+            f"má být hlavička 'Produkt'). Ujistěte se, že Excel odpovídá tomuto měsíci.")
+
+
+def count_day_blocks(ws):
+    """Spočítá, kolik denních bloků (po sobě jdoucích od dne 1) list obsahuje."""
+    day = 0
+    while day < 31 and is_day_block(ws, day + 1):
+        day += 1
+    return day
 
 
 def validate_excel_file(path):
@@ -74,14 +133,64 @@ def validate_excel_file(path):
     return None
 
 
-def set_excel_file(path):
+def check_month_blocks(path, month):
+    """
+    Ověří, že Excel má denní blok pro každý den daného měsíce.
+    Vrací text chyby, nebo None, pokud je soubor v pořádku.
+    """
+    # Načti z paměti - openpyxl jinak nechává soubor otevřený a Windows ho pak nesmaže
+    with open(path, 'rb') as f:
+        wb = openpyxl.load_workbook(io.BytesIO(f.read()), read_only=True)
+    try:
+        blocks = count_day_blocks(wb[WORKSHEET_NAME])
+    finally:
+        wb.close()
+
+    needed = days_in_month(month)
+    if blocks < needed:
+        return (f"Soubor má jen {blocks} denních bloků, ale {month_label(month)} má "
+                f"{needed} dní. Doplňte do listu '{WORKSHEET_NAME}' chybějící dny "
+                f"(každý den = {ROWS_PER_DAY} řádků s hlavičkou 'Produkt').")
+    return None
+
+
+def archive_current_excel():
+    """
+    Zkopíruje aktuální Excel do data/archiv/ jako 'RRRR-MM_název.xlsx' podle
+    měsíce, pro který byl nahrán. Volá se před nahráním nového souboru.
+
+    Returns:
+        str: cesta k archivní kopii, nebo None, pokud nebylo co archivovat
+    """
+    if not os.path.exists(EXCEL_FILE):
+        return None
+
+    os.makedirs(ARCHIVE_DIR, exist_ok=True)
+    month = EXCEL_MONTH or datetime.fromtimestamp(os.path.getmtime(EXCEL_FILE)).strftime("%Y-%m")
+    name, ext = os.path.splitext(os.path.basename(EXCEL_FILE))
+    archive_path = os.path.join(ARCHIVE_DIR, f"{month}_{name}{ext}")
+    if os.path.exists(archive_path):
+        # Stejný měsíc už v archivu je (soubor se nahrával víckrát) - nepřepisuj ho
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        archive_path = os.path.join(ARCHIVE_DIR, f"{month}_{name}_{timestamp}{ext}")
+
+    shutil.copy2(EXCEL_FILE, archive_path)
+    print(f"Předchozí Excel archivován: {archive_path}")
+    return archive_path
+
+
+def set_excel_file(path, month=None):
     """
     Ověří a nastaví novou cestu k Excel souboru a uloží ji do config.json.
+
+    Args:
+        path (str): cesta k Excel souboru
+        month (str): měsíc "RRRR-MM", pro který soubor platí (None = beze změny)
 
     Returns:
         dict: {"success": bool, "message": str, "error": str (volitelné)}
     """
-    global EXCEL_FILE
+    global EXCEL_FILE, EXCEL_MONTH
 
     path = (path or '').strip().strip('"').strip()
     if not path:
@@ -93,6 +202,8 @@ def set_excel_file(path):
 
     config = load_config()
     config['excel_file'] = path
+    if month:
+        config['excel_month'] = month
     try:
         with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
             json.dump(config, f, ensure_ascii=False, indent=2)
@@ -100,6 +211,8 @@ def set_excel_file(path):
         return {"success": False, "error": f"Nepodařilo se uložit konfiguraci: {str(e)}"}
 
     EXCEL_FILE = path
+    if month:
+        EXCEL_MONTH = month
     print(f"Nastavena nová cesta k Excelu: {EXCEL_FILE}")
     return {"success": True, "message": "Cesta k Excel souboru byla uložena"}
 
@@ -107,8 +220,9 @@ def set_excel_file(path):
 def save_uploaded_excel(uploaded_file):
     """
     Uloží Excel nahraný z webového rozhraní do složky data/ a nastaví ho
-    jako aktuální soubor. Pokud tam soubor se stejným názvem už je,
-    nejdřív ho zazálohuje do data/backup/.
+    jako aktuální soubor pro tento měsíc. Dosavadní Excel nejdřív uloží
+    do data/archiv/. Pokud v data/ soubor se stejným názvem už je,
+    zazálohuje ho navíc do data/backup/.
 
     Args:
         uploaded_file: werkzeug FileStorage z request.files
@@ -121,15 +235,18 @@ def save_uploaded_excel(uploaded_file):
         return {"success": False, "error": "Soubor musí být ve formátu .xlsx nebo .xlsm"}
 
     os.makedirs(DATA_DIR, exist_ok=True)
+    month = current_month()
     target = os.path.join(DATA_DIR, filename)
     tmp_path = os.path.join(DATA_DIR, '_nahravani' + os.path.splitext(filename)[1])
 
     try:
         uploaded_file.save(tmp_path)
 
-        error = validate_excel_file(tmp_path)
+        error = validate_excel_file(tmp_path) or check_month_blocks(tmp_path, month)
         if error:
             return {"success": False, "error": error}
+
+        archive_path = archive_current_excel()
 
         # Nepřepisuj existující soubor bez zálohy
         if os.path.exists(target):
@@ -151,9 +268,11 @@ def save_uploaded_excel(uploaded_file):
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
 
-    result = set_excel_file(target)
+    result = set_excel_file(target, month)
     if result['success']:
-        result['message'] = f"Soubor {filename} byl nahrán a nastaven"
+        result['message'] = f"Soubor {filename} byl nahrán pro {month_label(month)}"
+        if archive_path:
+            result['message'] += f", předchozí uložen do archivu jako {os.path.basename(archive_path)}"
     return result
 
 
@@ -277,6 +396,12 @@ def add_order_to_excel(order_data):
             print(f"CHYBA: {error_msg}")
             return {"success": False, "error": error_msg}
 
+        # Nezapisuj do Excelu z jiného měsíce - data by se smíchala
+        error_msg = get_month_error()
+        if error_msg:
+            print(f"CHYBA: {error_msg}")
+            return {"success": False, "error": error_msg}
+
         # Automatická záloha (pokud dnes ještě nebyla)
         auto_backup_if_needed()
 
@@ -297,13 +422,8 @@ def add_order_to_excel(order_data):
         print(f"Blok pro den {current_day} začíná na řádku {day_start_row}")
 
         # KONTROLA: Ověř, že tento blok existuje v Excel souboru
-        max_row = ws.max_row
-        expected_last_row = day_start_row + ROWS_PER_DAY - 1
-
-        if day_start_row > max_row:
-            error_msg = (f"Excel soubor má jen {max_row} řádků, "
-                        f"ale den {current_day} vyžaduje řádek {day_start_row}. "
-                        f"Ujistěte se, že používáte Excel soubor s {current_day} bloky pro tento měsíc.")
+        if not is_day_block(ws, current_day):
+            error_msg = day_block_error(current_day)
             print(f"CHYBA: {error_msg}")
             wb.close()
             return {"success": False, "error": error_msg}
@@ -381,6 +501,12 @@ def storno_order_in_excel(order_data):
             print(f"CHYBA: {error_msg}")
             return {"success": False, "error": error_msg}
 
+        # Nezapisuj do Excelu z jiného měsíce - data by se smíchala
+        error_msg = get_month_error()
+        if error_msg:
+            print(f"CHYBA: {error_msg}")
+            return {"success": False, "error": error_msg}
+
         # Automatická záloha (pokud dnes ještě nebyla)
         auto_backup_if_needed()
 
@@ -396,9 +522,8 @@ def storno_order_in_excel(order_data):
 
         day_start_row = get_day_start_row(current_day)
 
-        if day_start_row > ws.max_row:
-            error_msg = (f"Excel soubor má jen {ws.max_row} řádků, "
-                        f"ale den {current_day} vyžaduje řádek {day_start_row}.")
+        if not is_day_block(ws, current_day):
+            error_msg = day_block_error(current_day)
             print(f"CHYBA: {error_msg}")
             wb.close()
             return {"success": False, "error": error_msg}

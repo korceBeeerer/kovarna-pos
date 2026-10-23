@@ -500,6 +500,27 @@ main {
     background: #d1d5db;
 }
 
+/* Upozornění na Excel z jiného měsíce */
+.month-warning {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    padding: 15px 30px;
+    background: #fef2f2;
+    border-bottom: 3px solid #ef4444;
+    color: #b91c1c;
+    font-weight: 600;
+}
+
+.month-warning.active {
+    display: flex;
+}
+
+.month-warning .btn {
+    flex-shrink: 0;
+}
+
 /* Nastavení */
 .settings-status {
     margin-top: 8px;

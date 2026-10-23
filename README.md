@@ -13,6 +13,7 @@ Tabletová aplikace pro evidenci objednávek v kovárně. Zaměstnanec nakliká 
 - ↩️ **Storno** - Odečtení chybně zadaných nebo vrácených položek z Excelu
 - 💾 **Automatické zálohování** - Denní zálohy Excelu + tlačítko pro manuální zálohu
 - ⚙️ **Nastavení z prohlížeče** - Excel soubor nahrajete a stáhnete přímo v aplikaci
+- 🗓️ **Měsíční Excel s archivem** - Nový Excel se nahrává každý měsíc, předchozí se automaticky archivuje
 - 🌐 **Lokální síť** - Komunikace přes WiFi, **bez potřeby internetu**
 - ✅ **Real-time status** - Kontrola připojení mezi tabletem a PC
 
@@ -70,7 +71,8 @@ Excel se vybírá přímo v aplikaci, soubory Pythonu není potřeba upravovat:
 1. Spusťte server a otevřete aplikaci v prohlížeči (na PC i na tabletu)
 2. Klikněte na **⚙️ Nastavení** v hlavičce (když soubor nebyl nalezen, okno se otevře samo)
 3. Vyberte Excel soubor (.xlsx) a klikněte na **Nahrát a použít**
-4. Server ověří, že soubor obsahuje list **"Tržby"**, uloží ho do složky `data/` v aplikaci a znovu načte produkty
+4. Server ověří, že soubor obsahuje list **"Tržby"** a blok pro každý den aktuálního měsíce,
+   uloží ho do složky `data/` v aplikaci a znovu načte produkty
 
 **Důležité:** aplikace pak zapisuje do **nahrané kopie** ve složce `data/`, ne do původního souboru,
 který jste vybrali. Aktuální data otevřete přímo z `data/` na PC se serverem, nebo je stáhněte
@@ -79,6 +81,18 @@ tlačítkem **⬇ Stáhnout aktuální Excel** v Nastavení.
 - Když nahrajete soubor se stejným názvem, původní se nejdřív zazálohuje do `data/backup/` (`..._PREPSANO_...`)
 - Nastavení se uloží do `backend/config.json` a zůstane platné i po restartu serveru
 - Prohlížeč neumí serveru sdělit cestu k souboru, proto se soubor nahrává
+
+### Každý měsíc nový Excel
+
+**Nový Excel nahrávejte vždy 1. den v měsíci** (v ⚙️ Nastavení, stejně jako výše).
+
+- Aplikace si pamatuje, pro který měsíc byl Excel nahrán (`excel_month` v `backend/config.json`)
+- Když začne nový měsíc a Excel je stále z minulého, zobrazí se červené upozornění
+  a **objednávky ani storno se neuloží**, dokud nenahrajete nový soubor - jinak by se
+  zápisy nového měsíce smíchaly s daty minulého měsíce
+- Při nahrání se dosavadní Excel automaticky uloží do `data/archiv/` pod názvem s měsícem,
+  např. `2026-10_Tržby.xlsx`
+- Soubor, který nemá blok pro každý den měsíce (např. 30 dní pro říjen), aplikace odmítne
 
 ### 3. Nainstalujte závislosti
 
