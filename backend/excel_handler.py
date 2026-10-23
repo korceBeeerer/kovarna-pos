@@ -3,11 +3,14 @@ from datetime import datetime
 import json
 import os
 import shutil
+from werkzeug.utils import secure_filename
 
 # KONFIGURACE
-# Cesta k Excel souboru se nastavuje z webového rozhraní (⚙️ Nastavení)
-# a ukládá se do config.json vedle tohoto souboru.
-CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
+# Excel soubor se nahrává z webového rozhraní (⚙️ Nastavení) do složky data/
+# a cesta k němu se ukládá do config.json vedle tohoto souboru.
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_FILE = os.path.join(BACKEND_DIR, 'config.json')
+DATA_DIR = os.path.join(os.path.dirname(BACKEND_DIR), 'data')
 DEFAULT_EXCEL_FILE = r"C:\Users\martin.korcak\Downloads\Tabulka tržeb.xlsx"
 WORKSHEET_NAME = "Tržby"
 
@@ -42,8 +45,33 @@ def get_config():
     """Vrátí aktuální konfiguraci pro webové rozhraní."""
     return {
         "excel_file": EXCEL_FILE,
+        "excel_filename": os.path.basename(EXCEL_FILE),
         "exists": os.path.exists(EXCEL_FILE)
     }
+
+
+def validate_excel_file(path):
+    """
+    Ověří, že soubor je Excel s listem WORKSHEET_NAME.
+    Vrací text chyby, nebo None, pokud je soubor v pořádku.
+    """
+    if not os.path.isfile(path):
+        return f"Soubor nenalezen: {path}"
+
+    if not path.lower().endswith(('.xlsx', '.xlsm')):
+        return "Soubor musí být ve formátu .xlsx nebo .xlsm"
+
+    try:
+        wb = openpyxl.load_workbook(path, read_only=True)
+        sheet_names = wb.sheetnames
+        wb.close()
+    except Exception as e:
+        return f"Soubor nelze otevřít jako Excel: {str(e)}"
+
+    if WORKSHEET_NAME not in sheet_names:
+        return f"Soubor neobsahuje list '{WORKSHEET_NAME}' (nalezené listy: {', '.join(sheet_names)})"
+
+    return None
 
 
 def set_excel_file(path):
@@ -59,25 +87,9 @@ def set_excel_file(path):
     if not path:
         return {"success": False, "error": "Cesta k souboru nesmí být prázdná"}
 
-    if not os.path.isfile(path):
-        return {"success": False, "error": f"Soubor nenalezen: {path}"}
-
-    if not path.lower().endswith(('.xlsx', '.xlsm')):
-        return {"success": False, "error": "Soubor musí být ve formátu .xlsx nebo .xlsm"}
-
-    # Ověř, že soubor jde otevřít a obsahuje správný list
-    try:
-        wb = openpyxl.load_workbook(path, read_only=True)
-        sheet_names = wb.sheetnames
-        wb.close()
-    except Exception as e:
-        return {"success": False, "error": f"Soubor nelze otevřít jako Excel: {str(e)}"}
-
-    if WORKSHEET_NAME not in sheet_names:
-        return {
-            "success": False,
-            "error": f"Soubor neobsahuje list '{WORKSHEET_NAME}' (nalezené listy: {', '.join(sheet_names)})"
-        }
+    error = validate_excel_file(path)
+    if error:
+        return {"success": False, "error": error}
 
     config = load_config()
     config['excel_file'] = path
@@ -90,6 +102,59 @@ def set_excel_file(path):
     EXCEL_FILE = path
     print(f"Nastavena nová cesta k Excelu: {EXCEL_FILE}")
     return {"success": True, "message": "Cesta k Excel souboru byla uložena"}
+
+
+def save_uploaded_excel(uploaded_file):
+    """
+    Uloží Excel nahraný z webového rozhraní do složky data/ a nastaví ho
+    jako aktuální soubor. Pokud tam soubor se stejným názvem už je,
+    nejdřív ho zazálohuje do data/backup/.
+
+    Args:
+        uploaded_file: werkzeug FileStorage z request.files
+
+    Returns:
+        dict: {"success": bool, "message": str, "error": str (volitelné)}
+    """
+    filename = secure_filename(uploaded_file.filename or '')
+    if not filename.lower().endswith(('.xlsx', '.xlsm')):
+        return {"success": False, "error": "Soubor musí být ve formátu .xlsx nebo .xlsm"}
+
+    os.makedirs(DATA_DIR, exist_ok=True)
+    target = os.path.join(DATA_DIR, filename)
+    tmp_path = os.path.join(DATA_DIR, '_nahravani' + os.path.splitext(filename)[1])
+
+    try:
+        uploaded_file.save(tmp_path)
+
+        error = validate_excel_file(tmp_path)
+        if error:
+            return {"success": False, "error": error}
+
+        # Nepřepisuj existující soubor bez zálohy
+        if os.path.exists(target):
+            backup_dir = os.path.join(DATA_DIR, 'backup')
+            os.makedirs(backup_dir, exist_ok=True)
+            name, ext = os.path.splitext(filename)
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            backup_path = os.path.join(backup_dir, f"{name}_PREPSANO_{timestamp}{ext}")
+            shutil.copy2(target, backup_path)
+            print(f"Původní soubor zazálohován: {backup_path}")
+
+        os.replace(tmp_path, target)
+
+    except PermissionError:
+        return {"success": False, "error": f"Soubor {filename} nelze přepsat - není otevřený v Excelu?"}
+    except Exception as e:
+        return {"success": False, "error": f"Chyba při ukládání souboru: {str(e)}"}
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+    result = set_excel_file(target)
+    if result['success']:
+        result['message'] = f"Soubor {filename} byl nahrán a nastaven"
+    return result
 
 
 def get_day_start_row(day):

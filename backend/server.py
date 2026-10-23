@@ -1,11 +1,13 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
 from excel_handler import (add_order_to_excel, storno_order_in_excel, load_products_from_excel,
-                           backup_excel, get_backup_list, get_config, set_excel_file)
+                           backup_excel, get_backup_list, get_config, set_excel_file,
+                           save_uploaded_excel)
 from datetime import datetime
 import os
 
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # Max. velikost nahraného Excelu (50 MB)
 CORS(app)  # Povolí přístup z tabletu
 
 # Cesta k frontend složce
@@ -132,6 +134,31 @@ def update_config():
         return jsonify({**result, **get_config()}), 200
     else:
         return jsonify(result), 400
+
+@app.route('/api/config/upload', methods=['POST'])
+def upload_excel():
+    """
+    Nahraje Excel soubor z webového rozhraní (multipart, pole "file")
+    a nastaví ho jako aktuální soubor.
+    """
+    uploaded_file = request.files.get('file')
+    if not uploaded_file or not uploaded_file.filename:
+        return jsonify({"success": False, "error": "Nebyl vybrán žádný soubor"}), 400
+
+    result = save_uploaded_excel(uploaded_file)
+    if result['success']:
+        return jsonify({**result, **get_config()}), 200
+    else:
+        return jsonify(result), 400
+
+@app.route('/api/excel/download', methods=['GET'])
+def download_excel():
+    """Stáhne aktuální Excel soubor"""
+    config = get_config()
+    if not config['exists']:
+        return jsonify({"success": False, "error": "Excel soubor nenalezen"}), 404
+    return send_file(config['excel_file'], as_attachment=True,
+                     download_name=config['excel_filename'], max_age=0)
 
 @app.route('/api/health', methods=['GET'])
 def health_check():

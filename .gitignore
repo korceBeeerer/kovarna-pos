@@ -35,5 +35,6 @@ desktop.ini
 # Claude Code local settings
 .claude/settings.local.json
 
-# Lokální nastavení (cesta k Excelu)
+# Lokální nastavení a nahraný Excel
 backend/config.json
+data/

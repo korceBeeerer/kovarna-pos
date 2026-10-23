@@ -515,6 +515,23 @@ main {
     color: #ef4444;
 }
 
+.current-file {
+    padding: 12px;
+    background: #f9fafb;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-weight: 600;
+    color: #333;
+    word-break: break-all;
+}
+
+.btn-download {
+    display: block;
+    margin-top: 12px;
+    text-align: center;
+    text-decoration: none;
+}
+
 /* Modální okno */
 .modal {
     display: none;

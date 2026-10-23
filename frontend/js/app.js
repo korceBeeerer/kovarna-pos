@@ -28,8 +28,11 @@ const settingsBtn = document.getElementById('settingsBtn');
 const settingsModal = document.getElementById('settingsModal');
 const closeSettings = document.getElementById('closeSettings');
 const settingsForm = document.getElementById('settingsForm');
-const excelPathInput = document.getElementById('excelPath');
+const excelFileInput = document.getElementById('excelFile');
 const excelPathStatus = document.getElementById('excelPathStatus');
+const currentExcelFile = document.getElementById('currentExcelFile');
+const downloadExcelBtn = document.getElementById('downloadExcelBtn');
+const uploadExcelBtn = document.getElementById('uploadExcelBtn');
 
 // Funkce pro získání EUR kurzu
 function getEurRate() {
@@ -57,11 +60,10 @@ async function loadConfig() {
         const response = await fetch(`${API_URL}/api/config`);
         const data = await response.json();
         if (data.success) {
-            excelPathInput.value = data.excel_file || '';
-            updateExcelPathStatus(data.exists);
+            updateExcelFileInfo(data);
             if (!data.exists) {
                 openSettingsModal();
-                showNotification('Excel soubor nenalezen - nastavte cestu k souboru', 'error');
+                showNotification('Excel soubor nenalezen - nahrajte ho v Nastavení', 'error');
             }
         }
     } catch (error) {
@@ -69,9 +71,12 @@ async function loadConfig() {
     }
 }
 
-function updateExcelPathStatus(exists) {
-    excelPathStatus.textContent = exists ? '✓ Soubor nalezen' : '✗ Soubor nenalezen';
-    excelPathStatus.className = `settings-status ${exists ? 'ok' : 'error'}`;
+function updateExcelFileInfo(config) {
+    currentExcelFile.textContent = config.excel_filename || '-';
+    currentExcelFile.title = config.excel_file || '';
+    excelPathStatus.textContent = config.exists ? '✓ Soubor nalezen' : '✗ Soubor nenalezen';
+    excelPathStatus.className = `settings-status ${config.exists ? 'ok' : 'error'}`;
+    downloadExcelBtn.style.display = config.exists ? '' : 'none';
 }
 
 function openSettingsModal() {
@@ -80,34 +85,51 @@ function openSettingsModal() {
 
 function closeSettingsModal() {
     settingsModal.classList.remove('active');
+    settingsForm.reset();
 }
 
-// Uložení nové cesty k Excelu
+// Nahrání nového Excel souboru
 async function saveSettings(event) {
     event.preventDefault();
 
+    const file = excelFileInput.files[0];
+    if (!file) {
+        showNotification('Vyberte Excel soubor', 'error');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
     try {
-        const response = await fetch(`${API_URL}/api/config`, {
+        uploadExcelBtn.disabled = true;
+        uploadExcelBtn.textContent = 'Nahrávání...';
+
+        const response = await fetch(`${API_URL}/api/config/upload`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ excel_file: excelPathInput.value })
+            body: formData
         });
+
+        if (response.status === 413) {
+            showNotification('Soubor je příliš velký (max. 50 MB)', 'error');
+            return;
+        }
 
         const result = await response.json();
 
         if (response.ok && result.success) {
-            excelPathInput.value = result.excel_file;
-            updateExcelPathStatus(result.exists);
+            updateExcelFileInfo(result);
             closeSettingsModal();
-            showNotification('Cesta k Excelu uložena, načítám produkty', 'success');
+            showNotification(result.message + ', načítám produkty', 'success');
             loadProducts();
         } else {
             showNotification(result.error || 'Neznámá chyba', 'error');
         }
     } catch (error) {
         showNotification('Chyba připojení k serveru: ' + error.message, 'error');
+    } finally {
+        uploadExcelBtn.disabled = false;
+        uploadExcelBtn.textContent = 'Nahrát a použít';
     }
 }
 

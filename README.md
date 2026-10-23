@@ -12,7 +12,7 @@ Tabletová aplikace pro evidenci objednávek v kovárně. Zaměstnanec nakliká 
 - ➕ **Zakázkové produkty** - Možnost přidat speciální zakázku přímo do košíku (helma, nestandardní práce)
 - ↩️ **Storno** - Odečtení chybně zadaných nebo vrácených položek z Excelu
 - 💾 **Automatické zálohování** - Denní zálohy Excelu + tlačítko pro manuální zálohu
-- ⚙️ **Nastavení z prohlížeče** - Cestu k Excel souboru zadáte přímo v aplikaci
+- ⚙️ **Nastavení z prohlížeče** - Excel soubor nahrajete a stáhnete přímo v aplikaci
 - 🌐 **Lokální síť** - Komunikace přes WiFi, **bez potřeby internetu**
 - ✅ **Real-time status** - Kontrola připojení mezi tabletem a PC
 
@@ -63,17 +63,22 @@ Stáhněte a nainstalujte Python 3.8 nebo novější z [python.org](https://www.
 
 Při instalaci zaškrtněte **"Add Python to PATH"**
 
-### 2. Nastavte cestu k vašemu Excel souboru
+### 2. Nahrajte váš Excel soubor
 
-Cesta se nastavuje přímo v aplikaci, soubory Pythonu není potřeba upravovat:
+Excel se vybírá přímo v aplikaci, soubory Pythonu není potřeba upravovat:
 
-1. Spusťte server a otevřete aplikaci v prohlížeči
+1. Spusťte server a otevřete aplikaci v prohlížeči (na PC i na tabletu)
 2. Klikněte na **⚙️ Nastavení** v hlavičce (když soubor nebyl nalezen, okno se otevře samo)
-3. Zadejte celou cestu k Excelu na PC se serverem, např. `C:KovarnaDataTržby_2025.xlsx`
-   - Tip: Shift + pravé tlačítko na souboru → **Kopírovat jako cestu** (uvozovky nevadí)
-4. Klikněte na **Uložit**. Server ověří, že soubor existuje a obsahuje list **"Tržby"**, a produkty se znovu načtou
+3. Vyberte Excel soubor (.xlsx) a klikněte na **Nahrát a použít**
+4. Server ověří, že soubor obsahuje list **"Tržby"**, uloží ho do složky `data/` v aplikaci a znovu načte produkty
 
-Cesta se uloží do `backend/config.json` a zůstane platná i po restartu serveru.
+**Důležité:** aplikace pak zapisuje do **nahrané kopie** ve složce `data/`, ne do původního souboru,
+který jste vybrali. Aktuální data otevřete přímo z `data/` na PC se serverem, nebo je stáhněte
+tlačítkem **⬇ Stáhnout aktuální Excel** v Nastavení.
+
+- Když nahrajete soubor se stejným názvem, původní se nejdřív zazálohuje do `data/backup/` (`..._PREPSANO_...`)
+- Nastavení se uloží do `backend/config.json` a zůstane platné i po restartu serveru
+- Prohlížeč neumí serveru sdělit cestu k souboru, proto se soubor nahrává
 
 ### 3. Nainstalujte závislosti
 
@@ -215,14 +220,13 @@ CHYBA: Excel soubor nenalezen
 ```
 
 **Řešení:**
-1. Otevřete **⚙️ Nastavení** v aplikaci a zkontrolujte cestu
-2. Ujistěte se, že soubor existuje na PC, kde běží server (ne na tabletu)
-3. Použijte **celou cestu** včetně písmene disku, např. `C:...soubor.xlsx`
+1. Otevřete **⚙️ Nastavení** v aplikaci a nahrajte Excel soubor znovu
+2. Zkontrolujte, že nahraný soubor nikdo nesmazal ze složky `data/`
 
 ### Produkty se nenačítají
 
 **Zkontrolujte:**
-1. Je správná cesta k Excel souboru?
+1. Je v Nastavení nahraný správný Excel soubor?
 2. Je list pojmenován **"Tržby"**?
 3. Je struktura správná? (Sloupec B = Produkt, C = Cena)
 
@@ -246,8 +250,10 @@ CHYBA: Excel soubor nenalezen
 - `GET /api/products` - Načte produkty z Excelu
 - `POST /api/order` - Uloží objednávku do Excelu
 - `POST /api/storno` - Stornuje položky (odečte je z dnešního dne)
-- `GET /api/config` - Vrátí aktuální cestu k Excel souboru
-- `POST /api/config` - Nastaví novou cestu k Excel souboru (`{"excel_file": "..."}`)
+- `GET /api/config` - Vrátí aktuální Excel soubor
+- `POST /api/config/upload` - Nahraje nový Excel soubor (multipart, pole `file`)
+- `GET /api/excel/download` - Stáhne aktuální Excel soubor
+- `POST /api/config` - Nastaví cestu k souboru přímo na PC se serverem (`{"excel_file": "..."}`)
 - `POST /api/backup` - Vytvoří manuální zálohu Excelu
 - `GET /api/backups` - Seznam existujících záloh
 - `GET /api/health` - Kontrola stavu serveru
@@ -267,4 +273,4 @@ CHYBA: Excel soubor nenalezen
 Pokud narazíte na problém:
 1. Zkontrolujte konzoli serveru (CMD okno)
 2. Zkontrolujte konzoli prohlížeče (F12 → Console)
-3. Zkontrolujte cestu k Excel souboru v **⚙️ Nastavení**
+3. Zkontrolujte nahraný Excel soubor v **⚙️ Nastavení**
