@@ -260,7 +260,7 @@ CHYBA: Excel soubor nenalezen
 
 ⚠️ **Struktura souboru musí zůstat stejná** - 50 řádků na den
 
-⚠️ **Zakázkové produkty** se přidávají přímo do košíku a při uložení objednávky se zapíší do Excelu jako nový řádek v příslušném dni
+⚠️ **Zakázkové produkty** se přidávají přímo do košíku a při uložení objednávky se zapíší do Excelu jako nový řádek v příslušném dni. Zapisují se jen do prázdných řádků nad řádkem „Celkem“. Když v daném dni dojdou, objednávka se neuloží a aplikace ohlásí chybu (přidejte v Excelu prázdné řádky nad „Celkem“)
 
 ## Podpora
 

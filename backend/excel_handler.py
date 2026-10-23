@@ -171,9 +171,15 @@ def find_empty_row_in_day(ws, day_start_row):
     """
     Najde první prázdný řádek v daném dni pro přidání vlastního produktu.
     Vrací číslo řádku nebo None, pokud není volný řádek.
+    Hledá jen nad řádkem "Celkem", aby se nepřepsal součtový vzorec.
     """
     for offset in range(PRODUCTS_START_OFFSET, ROWS_PER_DAY - 1):  # -1 aby zůstal poslední řádek prázdný
         row_num = day_start_row + offset
+
+        cell_number = ws.cell(row=row_num, column=COL_NUMBER).value
+        if isinstance(cell_number, str) and cell_number.strip().lower() == 'celkem':
+            break
+
         cell_product = ws.cell(row=row_num, column=COL_PRODUCT).value
         cell_price = ws.cell(row=row_num, column=COL_PRICE).value
 
@@ -267,7 +273,12 @@ def add_order_to_excel(order_data):
                     ws.cell(row=empty_row, column=COL_TOTAL, value=f"=D{empty_row}*C{empty_row}")
                     print(f"  ✓ Nový produkt přidán na řádek {empty_row}")
                 else:
-                    print(f"  ✗ VAROVÁNÍ: Není místo pro přidání nového produktu '{product_name}'")
+                    # Neukládej nic, aby se objednávka nezapsala jen napůl
+                    wb.close()
+                    error_msg = (f"V Excelu pro den {current_day} už není volný řádek "
+                                f"pro zakázku '{product_name}'. Objednávka nebyla uložena.")
+                    print(f"  ✗ CHYBA: {error_msg}")
+                    return {"success": False, "error": error_msg}
 
         # Ulož Excel
         wb.save(EXCEL_FILE)
