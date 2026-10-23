@@ -1,10 +1,14 @@
 import openpyxl
 from datetime import datetime
+import json
 import os
 import shutil
 
-# KONFIGURACE - UPRAVTE CESTU K VAŠEMU EXCEL SOUBORU
-EXCEL_FILE = r"C:\Users\martin.korcak\Downloads\Tabulka tržeb.xlsx"
+# KONFIGURACE
+# Cesta k Excel souboru se nastavuje z webového rozhraní (⚙️ Nastavení)
+# a ukládá se do config.json vedle tohoto souboru.
+CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
+DEFAULT_EXCEL_FILE = r"C:\Users\martin.korcak\Downloads\Tabulka tržeb.xlsx"
 WORKSHEET_NAME = "Tržby"
 
 # Konstanty pro strukturu Excelu
@@ -18,6 +22,74 @@ COL_PRODUCT = 2  # B
 COL_PRICE = 3  # C
 COL_QUANTITY = 4  # D
 COL_TOTAL = 5  # E
+
+
+def load_config():
+    """Načte konfiguraci z config.json (pokud existuje)."""
+    try:
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"Chyba při načítání konfigurace: {str(e)}")
+    return {}
+
+
+EXCEL_FILE = load_config().get('excel_file') or DEFAULT_EXCEL_FILE
+
+
+def get_config():
+    """Vrátí aktuální konfiguraci pro webové rozhraní."""
+    return {
+        "excel_file": EXCEL_FILE,
+        "exists": os.path.exists(EXCEL_FILE)
+    }
+
+
+def set_excel_file(path):
+    """
+    Ověří a nastaví novou cestu k Excel souboru a uloží ji do config.json.
+
+    Returns:
+        dict: {"success": bool, "message": str, "error": str (volitelné)}
+    """
+    global EXCEL_FILE
+
+    path = (path or '').strip().strip('"').strip()
+    if not path:
+        return {"success": False, "error": "Cesta k souboru nesmí být prázdná"}
+
+    if not os.path.isfile(path):
+        return {"success": False, "error": f"Soubor nenalezen: {path}"}
+
+    if not path.lower().endswith(('.xlsx', '.xlsm')):
+        return {"success": False, "error": "Soubor musí být ve formátu .xlsx nebo .xlsm"}
+
+    # Ověř, že soubor jde otevřít a obsahuje správný list
+    try:
+        wb = openpyxl.load_workbook(path, read_only=True)
+        sheet_names = wb.sheetnames
+        wb.close()
+    except Exception as e:
+        return {"success": False, "error": f"Soubor nelze otevřít jako Excel: {str(e)}"}
+
+    if WORKSHEET_NAME not in sheet_names:
+        return {
+            "success": False,
+            "error": f"Soubor neobsahuje list '{WORKSHEET_NAME}' (nalezené listy: {', '.join(sheet_names)})"
+        }
+
+    config = load_config()
+    config['excel_file'] = path
+    try:
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(config, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        return {"success": False, "error": f"Nepodařilo se uložit konfiguraci: {str(e)}"}
+
+    EXCEL_FILE = path
+    print(f"Nastavena nová cesta k Excelu: {EXCEL_FILE}")
+    return {"success": True, "message": "Cesta k Excel souboru byla uložena"}
 
 
 def get_day_start_row(day):
@@ -208,6 +280,101 @@ def add_order_to_excel(order_data):
 
     except Exception as e:
         error_msg = f"Chyba při ukládání do Excelu: {str(e)}"
+        print(error_msg)
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": error_msg}
+
+
+def storno_order_in_excel(order_data):
+    """
+    Stornuje položky v Excelu pro aktuální den (odečte množství).
+    Funguje opačně než add_order_to_excel. Storno je atomické - pokud některou
+    položku nelze stornovat (není v Excelu nebo by množství kleslo pod nulu),
+    neuloží se nic.
+
+    Args:
+        order_data (dict): stejný formát jako u add_order_to_excel
+
+    Returns:
+        dict: {"success": bool, "message": str, "error": str (volitelné)}
+    """
+    try:
+        if not os.path.exists(EXCEL_FILE):
+            error_msg = f"Excel soubor nenalezen: {EXCEL_FILE}"
+            print(f"CHYBA: {error_msg}")
+            return {"success": False, "error": error_msg}
+
+        # Automatická záloha (pokud dnes ještě nebyla)
+        auto_backup_if_needed()
+
+        wb = openpyxl.load_workbook(EXCEL_FILE)
+        ws = wb[WORKSHEET_NAME]
+
+        timestamp = datetime.strptime(order_data['timestamp'], "%Y-%m-%d %H:%M:%S")
+        current_day = timestamp.day
+
+        print(f"\n{'='*60}")
+        print(f"STORNO pro den {current_day}. {timestamp.month}. {timestamp.year}")
+        print(f"{'='*60}")
+
+        day_start_row = get_day_start_row(current_day)
+
+        if day_start_row > ws.max_row:
+            error_msg = (f"Excel soubor má jen {ws.max_row} řádků, "
+                        f"ale den {current_day} vyžaduje řádek {day_start_row}.")
+            print(f"CHYBA: {error_msg}")
+            wb.close()
+            return {"success": False, "error": error_msg}
+
+        # Sečti množství podle názvu (stejný produkt může být v košíku víckrát)
+        totals = {}
+        for item in order_data['items']:
+            key = item['name'].strip().lower()
+            if key not in totals:
+                totals[key] = {"name": item['name'].strip(), "quantity": 0}
+            totals[key]["quantity"] += item['quantity']
+
+        # 1. Ověř všechny položky dříve, než cokoliv změníš
+        changes = []
+        errors = []
+        for entry in totals.values():
+            product_name = entry["name"]
+            quantity = entry["quantity"]
+
+            product_row = find_product_row_in_day(ws, day_start_row, product_name)
+            if not product_row:
+                errors.append(f"'{product_name}' dnes v Excelu není")
+                continue
+
+            current_quantity = ws.cell(row=product_row, column=COL_QUANTITY).value or 0
+            if current_quantity < quantity:
+                errors.append(f"'{product_name}': dnes prodáno jen {current_quantity} ks, nelze stornovat {quantity} ks")
+                continue
+
+            changes.append((product_row, product_name, current_quantity, current_quantity - quantity))
+
+        if errors:
+            wb.close()
+            error_msg = "Storno nelze provést: " + "; ".join(errors)
+            print(f"CHYBA: {error_msg}")
+            return {"success": False, "error": error_msg}
+
+        # 2. Proveď změny
+        for product_row, product_name, current_quantity, new_quantity in changes:
+            ws.cell(row=product_row, column=COL_QUANTITY, value=new_quantity)
+            print(f"  ✓ {product_name} (řádek {product_row}), množství: {current_quantity} → {new_quantity}")
+
+        wb.save(EXCEL_FILE)
+        wb.close()
+
+        print(f"\n{'='*60}")
+        print(f"Storno úspěšně uloženo!")
+        print(f"{'='*60}\n")
+        return {"success": True, "message": "Položky byly stornovány"}
+
+    except Exception as e:
+        error_msg = f"Chyba při stornování v Excelu: {str(e)}"
         print(error_msg)
         import traceback
         traceback.print_exc()

@@ -4,6 +4,7 @@ const API_URL = window.location.origin;
 // Stav aplikace
 let products = [];
 let cart = [];
+let stornoMode = false; // true = položky v košíku se z Excelu odečtou
 
 // DOM elementy
 const productsGrid = document.getElementById('productsGrid');
@@ -20,6 +21,15 @@ const customOrderForm = document.getElementById('customOrderForm');
 const serverStatus = document.getElementById('serverStatus');
 const statusText = document.getElementById('statusText');
 const notification = document.getElementById('notification');
+const stornoModeBtn = document.getElementById('stornoModeBtn');
+const cartPanel = document.getElementById('cartPanel');
+const cartTitle = document.getElementById('cartTitle');
+const settingsBtn = document.getElementById('settingsBtn');
+const settingsModal = document.getElementById('settingsModal');
+const closeSettings = document.getElementById('closeSettings');
+const settingsForm = document.getElementById('settingsForm');
+const excelPathInput = document.getElementById('excelPath');
+const excelPathStatus = document.getElementById('excelPathStatus');
 
 // Funkce pro získání EUR kurzu
 function getEurRate() {
@@ -35,9 +45,71 @@ function convertToEur(czk) {
 // Inicializace
 document.addEventListener('DOMContentLoaded', () => {
     loadProducts();
+    loadConfig();
     checkServerConnection();
     setupEventListeners();
+    renderCart();
 });
+
+// Načtení nastavení - pokud Excel soubor neexistuje, rovnou otevři nastavení
+async function loadConfig() {
+    try {
+        const response = await fetch(`${API_URL}/api/config`);
+        const data = await response.json();
+        if (data.success) {
+            excelPathInput.value = data.excel_file || '';
+            updateExcelPathStatus(data.exists);
+            if (!data.exists) {
+                openSettingsModal();
+                showNotification('Excel soubor nenalezen - nastavte cestu k souboru', 'error');
+            }
+        }
+    } catch (error) {
+        console.error('Chyba při načítání nastavení:', error);
+    }
+}
+
+function updateExcelPathStatus(exists) {
+    excelPathStatus.textContent = exists ? '✓ Soubor nalezen' : '✗ Soubor nenalezen';
+    excelPathStatus.className = `settings-status ${exists ? 'ok' : 'error'}`;
+}
+
+function openSettingsModal() {
+    settingsModal.classList.add('active');
+}
+
+function closeSettingsModal() {
+    settingsModal.classList.remove('active');
+}
+
+// Uložení nové cesty k Excelu
+async function saveSettings(event) {
+    event.preventDefault();
+
+    try {
+        const response = await fetch(`${API_URL}/api/config`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ excel_file: excelPathInput.value })
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            excelPathInput.value = result.excel_file;
+            updateExcelPathStatus(result.exists);
+            closeSettingsModal();
+            showNotification('Cesta k Excelu uložena, načítám produkty', 'success');
+            loadProducts();
+        } else {
+            showNotification(result.error || 'Neznámá chyba', 'error');
+        }
+    } catch (error) {
+        showNotification('Chyba připojení k serveru: ' + error.message, 'error');
+    }
+}
 
 // Kontrola připojení k serveru
 async function checkServerConnection() {
@@ -138,13 +210,15 @@ function addToCart(product) {
     }
 
     renderCart();
-    showNotification('Přidáno do košíku', 'success');
+    showNotification(stornoMode ? 'Přidáno ke stornu' : 'Přidáno do košíku', 'success');
 }
 
 // Vykreslení košíku
 function renderCart() {
     if (cart.length === 0) {
-        cartItems.innerHTML = '<p class="empty-cart">Košík je prázdný</p>';
+        cartItems.innerHTML = stornoMode
+            ? '<p class="empty-cart">Vyberte produkty, které chcete stornovat</p>'
+            : '<p class="empty-cart">Košík je prázdný</p>';
         totalPrice.innerHTML = '0 Kč<br><span class="price-eur">0 EUR</span>';
         saveBtn.disabled = true;
         return;
@@ -210,7 +284,8 @@ function decreaseQuantity(productId) {
 function updateTotal() {
     const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     const totalEur = convertToEur(total);
-    totalPrice.innerHTML = `${total} Kč<br><span class="price-eur">${totalEur.toFixed(2)} EUR</span>`;
+    const sign = stornoMode ? '−' : '';
+    totalPrice.innerHTML = `${sign}${total} Kč<br><span class="price-eur">${sign}${totalEur.toFixed(2)} EUR</span>`;
 }
 
 // Vymazání košíku
@@ -224,11 +299,41 @@ function clearCart() {
     }
 }
 
-// Uložení objednávky
+// Přepnutí mezi prodejem a stornem
+function toggleStornoMode() {
+    if (cart.length > 0 && !confirm('Přepnutím režimu se vyprázdní košík. Pokračovat?')) {
+        return;
+    }
+
+    stornoMode = !stornoMode;
+    cart = [];
+
+    cartPanel.classList.toggle('storno-mode', stornoMode);
+    stornoModeBtn.classList.toggle('active', stornoMode);
+    stornoModeBtn.textContent = stornoMode ? 'Zpět na prodej' : 'Storno';
+    cartTitle.textContent = stornoMode ? 'Storno' : 'Košík';
+    saveBtn.textContent = getSaveButtonText();
+
+    renderCart();
+    showNotification(stornoMode ? 'Režim storna zapnut' : 'Režim prodeje', 'info');
+}
+
+function getSaveButtonText() {
+    return stornoMode ? 'Stornovat položky' : 'Uložit objednávku';
+}
+
+// Uložení objednávky (nebo storna)
 async function saveOrder() {
     if (cart.length === 0) {
         showNotification('Košík je prázdný', 'error');
         return;
+    }
+
+    if (stornoMode) {
+        const summary = cart.map(item => `${item.quantity}× ${item.name}`).join('\n');
+        if (!confirm(`Opravdu stornovat tyto položky z dnešního dne?\n\n${summary}`)) {
+            return;
+        }
     }
 
     const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -242,7 +347,8 @@ async function saveOrder() {
         saveBtn.disabled = true;
         saveBtn.textContent = 'Ukládání...';
 
-        const response = await fetch(`${API_URL}/api/order`, {
+        const endpoint = stornoMode ? 'storno' : 'order';
+        const response = await fetch(`${API_URL}/api/${endpoint}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -253,7 +359,7 @@ async function saveOrder() {
         const result = await response.json();
 
         if (response.ok && result.success) {
-            showNotification('Objednávka byla uložena!', 'success');
+            showNotification(stornoMode ? 'Položky byly stornovány!' : 'Objednávka byla uložena!', 'success');
             cart = [];
             renderCart();
         } else {
@@ -263,8 +369,8 @@ async function saveOrder() {
         showNotification('Chyba připojení k serveru: ' + error.message, 'error');
         updateServerStatus(false);
     } finally {
-        saveBtn.disabled = false;
-        saveBtn.textContent = 'Uložit objednávku';
+        saveBtn.disabled = cart.length === 0;
+        saveBtn.textContent = getSaveButtonText();
     }
 }
 
@@ -296,7 +402,7 @@ function addCustomOrder(event) {
     cart.push(customItem);
     renderCart();
     closeCustomOrderModal();
-    showNotification(`Zakázka "${name}" přidána do košíku`, 'success');
+    showNotification(`Zakázka "${name}" přidána ${stornoMode ? 'ke stornu' : 'do košíku'}`, 'success');
 }
 
 // Zobrazení notifikace
@@ -345,6 +451,17 @@ function setupEventListeners() {
     customOrderBtn.addEventListener('click', openCustomOrderModal);
     closeModal.addEventListener('click', closeCustomOrderModal);
     customOrderForm.addEventListener('submit', addCustomOrder);
+    stornoModeBtn.addEventListener('click', toggleStornoMode);
+    settingsBtn.addEventListener('click', openSettingsModal);
+    closeSettings.addEventListener('click', closeSettingsModal);
+    settingsForm.addEventListener('submit', saveSettings);
+
+    // Zavření nastavení kliknutím mimo okno
+    settingsModal.addEventListener('click', (e) => {
+        if (e.target === settingsModal) {
+            closeSettingsModal();
+        }
+    });
 
     // Přepočítání cen při změně EUR kurzu
     eurRateInput.addEventListener('input', () => {

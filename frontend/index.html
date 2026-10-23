@@ -22,6 +22,10 @@
                     <span class="backup-icon">💾</span>
                     <span class="backup-text">Zálohovat</span>
                 </button>
+                <button class="btn-backup" id="settingsBtn" title="Nastavení cesty k Excel souboru">
+                    <span class="backup-icon">⚙️</span>
+                    <span class="backup-text">Nastavení</span>
+                </button>
             </div>
             <div class="status" id="serverStatus">
                 <span class="status-indicator"></span>
@@ -39,14 +43,20 @@
                 </div>
 
                 <!-- Tlačítko pro přidání zakázky -->
-                <button class="btn btn-secondary" id="customOrderBtn">
-                    + Přidat zakázku
-                </button>
+                <div class="product-actions">
+                    <button class="btn btn-secondary" id="customOrderBtn">
+                        + Přidat zakázku
+                    </button>
+                    <button class="btn btn-storno" id="stornoModeBtn">
+                        Storno
+                    </button>
+                </div>
             </div>
 
             <!-- Pravý panel - Košík a souhrn -->
-            <div class="cart-panel">
-                <h2>Košík</h2>
+            <div class="cart-panel" id="cartPanel">
+                <h2 id="cartTitle">Košík</h2>
+                <p class="storno-hint">Režim storna: vybrané položky se po potvrzení odečtou z dnešního dne v Excelu.</p>
                 <div class="cart-items" id="cartItems">
                     <p class="empty-cart">Košík je prázdný</p>
                 </div>
@@ -96,6 +106,32 @@
                         <input type="number" id="customQuantity" min="1" value="1" required>
                     </div>
                     <button type="submit" class="btn btn-primary">Přidat do košíku</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modální okno nastavení -->
+    <div class="modal" id="settingsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Nastavení</h2>
+                <span class="close" id="closeSettings">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p style="color: #6b7280; margin-bottom: 20px;">
+                    Zadejte celou cestu k Excel souboru na počítači, kde běží server,
+                    např. <code>C:\Kovarna\Tabulka tržeb.xlsx</code>.
+                    Ve Windows ji získáte tak, že na soubor kliknete pravým tlačítkem se Shiftem
+                    a zvolíte „Kopírovat jako cestu“.
+                </p>
+                <form id="settingsForm">
+                    <div class="form-group">
+                        <label for="excelPath">Cesta k Excel souboru:</label>
+                        <input type="text" id="excelPath" placeholder="C:\Kovarna\Tabulka tržeb.xlsx" required>
+                        <div class="settings-status" id="excelPathStatus"></div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Uložit</button>
                 </form>
             </div>
         </div>

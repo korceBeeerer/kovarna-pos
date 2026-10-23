@@ -437,6 +437,84 @@ main {
     background: #dc2626;
 }
 
+/* Zakázka + Storno pod produkty */
+.product-actions {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 10px;
+}
+
+.btn-storno {
+    background: white;
+    color: #dc2626;
+    border: 2px solid #dc2626;
+}
+
+.btn-storno:hover {
+    background: #fef2f2;
+}
+
+.btn-storno.active {
+    background: #dc2626;
+    color: white;
+}
+
+/* Režim storna */
+.storno-hint {
+    display: none;
+    background: #fef2f2;
+    color: #b91c1c;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 15px;
+    font-size: 0.9em;
+    font-weight: 600;
+}
+
+.cart-panel.storno-mode {
+    background: #fff1f2;
+    box-shadow: inset 0 0 0 3px #dc2626;
+}
+
+.cart-panel.storno-mode h2 {
+    color: #dc2626;
+}
+
+.cart-panel.storno-mode .storno-hint {
+    display: block;
+}
+
+.cart-panel.storno-mode .total-price {
+    color: #dc2626;
+}
+
+.cart-panel.storno-mode .btn-success {
+    background: #dc2626;
+}
+
+.cart-panel.storno-mode .btn-success:hover {
+    background: #b91c1c;
+}
+
+.cart-panel.storno-mode .btn-success:disabled {
+    background: #d1d5db;
+}
+
+/* Nastavení */
+.settings-status {
+    margin-top: 8px;
+    font-size: 0.9em;
+    font-weight: 600;
+}
+
+.settings-status.ok {
+    color: #10b981;
+}
+
+.settings-status.error {
+    color: #ef4444;
+}
+
 /* Modální okno */
 .modal {
     display: none;

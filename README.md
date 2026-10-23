@@ -10,7 +10,9 @@ Tabletová aplikace pro evidenci objednávek v kovárně. Zaměstnanec nakliká 
 - 💱 **Dual měna** - Zobrazení cen v CZK i EUR s nastavitelným kurzem
 - 📅 **Automatický zápis podle dne** - Objednávky se ukládají do správného dne v měsíci
 - ➕ **Zakázkové produkty** - Možnost přidat speciální zakázku přímo do košíku (helma, nestandardní práce)
+- ↩️ **Storno** - Odečtení chybně zadaných nebo vrácených položek z Excelu
 - 💾 **Automatické zálohování** - Denní zálohy Excelu + tlačítko pro manuální zálohu
+- ⚙️ **Nastavení z prohlížeče** - Cestu k Excel souboru zadáte přímo v aplikaci
 - 🌐 **Lokální síť** - Komunikace přes WiFi, **bez potřeby internetu**
 - ✅ **Real-time status** - Kontrola připojení mezi tabletem a PC
 
@@ -63,16 +65,15 @@ Při instalaci zaškrtněte **"Add Python to PATH"**
 
 ### 2. Nastavte cestu k vašemu Excel souboru
 
-Otevřete soubor `backend/excel_handler.py` a na **řádku 6** upravte cestu:
+Cesta se nastavuje přímo v aplikaci, soubory Pythonu není potřeba upravovat:
 
-```python
-EXCEL_FILE = r"C:\Users\martin.korcak\Downloads\Tabulka tržeb.xlsx"
-```
+1. Spusťte server a otevřete aplikaci v prohlížeči
+2. Klikněte na **⚙️ Nastavení** v hlavičce (když soubor nebyl nalezen, okno se otevře samo)
+3. Zadejte celou cestu k Excelu na PC se serverem, např. `C:KovarnaDataTržby_2025.xlsx`
+   - Tip: Shift + pravé tlačítko na souboru → **Kopírovat jako cestu** (uvozovky nevadí)
+4. Klikněte na **Uložit**. Server ověří, že soubor existuje a obsahuje list **"Tržby"**, a produkty se znovu načtou
 
-Změňte na cestu k **VAŠEMU** Excel souboru, například:
-```python
-EXCEL_FILE = r"C:\Kovarna\Data\Tržby_2025.xlsx"
-```
+Cesta se uloží do `backend/config.json` a zůstane platná i po restartu serveru.
 
 ### 3. Nainstalujte závislosti
 
@@ -155,6 +156,20 @@ Data se automaticky zapíší do Excelu:
 - Navýší počet kusů u existujících produktů
 - Přidá nové řádky pro zakázkové produkty
 
+### Storno (odečtení položek)
+
+Když je potřeba vrátit už uloženou objednávku nebo opravit překlep:
+1. Klikněte na **Storno** pod produkty. Košík zčervená a přepne se do režimu storna
+2. Naklikejte produkty, které se mají odečíst (stejně jako při prodeji, včetně **+ Přidat zakázku** pro zakázkové položky)
+3. Klikněte na **Stornovat položky** a potvrďte
+4. Množství se odečte ze sloupce **Kusy** v dnešním dni
+5. Tlačítkem **Zpět na prodej** se vrátíte do běžného režimu
+
+Storno je bezpečné:
+- Stornovat jde jen produkty, které jsou dnes v Excelu zapsané
+- Počet kusů nemůže klesnout pod nulu
+- Když nejde stornovat některá položka, neprovede se nic a aplikace řekne proč
+
 ### Zálohování
 
 **Automatická záloha:**
@@ -200,9 +215,9 @@ CHYBA: Excel soubor nenalezen
 ```
 
 **Řešení:**
-1. Zkontrolujte cestu v `backend/excel_handler.py` na řádku 6
-2. Ujistěte se, že soubor existuje
-3. Použijte **absolutní cestu** s `r"..."` prefixem
+1. Otevřete **⚙️ Nastavení** v aplikaci a zkontrolujte cestu
+2. Ujistěte se, že soubor existuje na PC, kde běží server (ne na tabletu)
+3. Použijte **celou cestu** včetně písmene disku, např. `C:...soubor.xlsx`
 
 ### Produkty se nenačítají
 
@@ -230,6 +245,9 @@ CHYBA: Excel soubor nenalezen
 
 - `GET /api/products` - Načte produkty z Excelu
 - `POST /api/order` - Uloží objednávku do Excelu
+- `POST /api/storno` - Stornuje položky (odečte je z dnešního dne)
+- `GET /api/config` - Vrátí aktuální cestu k Excel souboru
+- `POST /api/config` - Nastaví novou cestu k Excel souboru (`{"excel_file": "..."}`)
 - `POST /api/backup` - Vytvoří manuální zálohu Excelu
 - `GET /api/backups` - Seznam existujících záloh
 - `GET /api/health` - Kontrola stavu serveru
@@ -249,4 +267,4 @@ CHYBA: Excel soubor nenalezen
 Pokud narazíte na problém:
 1. Zkontrolujte konzoli serveru (CMD okno)
 2. Zkontrolujte konzoli prohlížeče (F12 → Console)
-3. Zkontrolujte cestu k Excel souboru v `excel_handler.py`
+3. Zkontrolujte cestu k Excel souboru v **⚙️ Nastavení**

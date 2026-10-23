@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-from excel_handler import add_order_to_excel, load_products_from_excel, backup_excel, get_backup_list
+from excel_handler import (add_order_to_excel, storno_order_in_excel, load_products_from_excel,
+                           backup_excel, get_backup_list, get_config, set_excel_file)
 from datetime import datetime
 import os
 
@@ -79,6 +80,58 @@ def save_order():
             "success": False,
             "error": str(e)
         }), 500
+
+@app.route('/api/storno', methods=['POST'])
+def storno_order():
+    """
+    Stornuje položky - odečte je z Excelu pro aktuální den.
+    Očekávaná data jsou stejná jako u /api/order.
+    """
+    try:
+        data = request.json
+
+        if not data or 'items' not in data or 'total' not in data:
+            return jsonify({"error": "Neplatná data"}), 400
+
+        order_data = {
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "items": data['items'],
+            "total": data['total']
+        }
+
+        result = storno_order_in_excel(order_data)
+
+        if result['success']:
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 400
+
+    except Exception as e:
+        print(f"Chyba: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/config', methods=['GET'])
+def read_config():
+    """Vrátí aktuální nastavení (cestu k Excel souboru)"""
+    return jsonify({"success": True, **get_config()}), 200
+
+@app.route('/api/config', methods=['POST'])
+def update_config():
+    """
+    Nastaví novou cestu k Excel souboru.
+
+    Očekávaná data:
+    {"excel_file": "C:\\Kovarna\\Tržby.xlsx"}
+    """
+    data = request.json or {}
+    result = set_excel_file(data.get('excel_file'))
+    if result['success']:
+        return jsonify({**result, **get_config()}), 200
+    else:
+        return jsonify(result), 400
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
