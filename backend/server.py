@@ -5,6 +5,11 @@ from excel_handler import (add_order_to_excel, storno_order_in_excel, load_produ
                            save_uploaded_excel)
 from datetime import datetime
 import os
+import sys
+
+# Konzole ve Windows (cp1250) neumí znaky jako ✓ nebo → a výpis by shodil zápis do Excelu
+for stream in (sys.stdout, sys.stderr):
+    stream.reconfigure(encoding='utf-8', errors='replace')
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # Max. velikost nahraného Excelu (50 MB)
